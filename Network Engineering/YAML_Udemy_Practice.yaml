@@ -1,0 +1,24 @@
+# Philly DC Host Data
+%TAG ! variable:that:is:tagged
+---
+host: phl-42
+datacenter:
+  location: Philedelphia 
+  cab: "13" 
+  cab_unit: "3" 
+roles:  
+  - webserver
+  - wp_database
+downtime_sch: |
+  2020-10-31 - kernal upgrade
+  2021-03-08 - security fix
+comments: >
+ Experiencing high I/O
+ since 2018-10-01.
+ Currently investigating.
+---
+host: phl-43
+datacenter:
+  location: Philadelphia
+  cab: "13"
+  cab_unit: "4"
