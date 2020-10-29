@@ -1,0 +1,105 @@
+name: Android-CI/CD
+
+on:
+  push:
+    branches:
+      - master
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+       REPOSITORY_URL: github.com
+       IMAGE_NAME: ${{ github.repository }}/${{ APP-NAME }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - uses: act10ns/slack@v1
+        with:
+         status: starting
+           channel: '#general'
+        if: always()    
+      - uses: actions/checkout@v1
+      - name: set up JDK 11
+        uses: actions/setup-java@v1
+        with:
+          java-version: 11
+#       - name: Android-build
+#         run: |
+#           ./gradlew clean assembleDebug
+#           sudo mv app/build/outputs/apk/debug/app-debug.apk tests/
+#           sudo apt install zip
+#           sudo zip -r app.zip tests
+      
+#       - uses: montudor/action-zip@v0.1.0
+#         with:
+#           args: zip -qq -r debug.zip app/build/outputs/apk/debug
+#       - name: Archive production artifacts
+#         uses: actions/upload-artifact@v2
+#         with:
+#           name: ${{ secrets.NAME }}
+#           path: |
+#             app.zip      
+      - name: Cache-SonarCloud-packages
+        uses: actions/cache@v1
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      - name: Cache-Gradle-packages
+        uses: actions/cache@v1
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
+          restore-keys: ${{ runner.os }}-gradle
+      - name: Build-APK-Sonarcloud-Tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB }}  
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ./gradlew clean assembleDebug sonarqube        #--info
+          sudo mv app/build/outputs/apk/debug/app-debug.apk tests/
+          sudo apt install zip
+          sudo zip -r app.zip tests   
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v2
+        with:
+         name: ${{ secrets.NAME }}
+         path: |
+            app.zip         
+      - name: Upload-APK-to-S3-Bucket
+        uses: zdurham/s3-upload-github-action@master   
+        env:
+         FILE: app.zip
+         AWS_REGION: ${{ secrets.REGION }}
+         S3_BUCKET: ${{ secrets.S3_BUCKET }}
+         S3_KEY: ${{ secrets.S3_KEY }}
+         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+     
+      - uses: act10ns/slack@v1
+        with:
+           status: ${{ job.status }}
+           steps: ${{ toJson(steps) }}
+        #channel: '#general'
+        if: always()   
+      - name: Send-Mail-Notifications
+        uses: dawidd6/action-send-mail@v2
+        with:
+          steps: ${{ toJson(steps) }}
+          server_address: ${{ secrets.SERVER }}
+          server_port: ${{ secrets.PORT }}
+          content_type: text/html
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: CI/CD Notifications-${{GITHUB.REPOSITORY}}-Build-${{ job.status }}
+          body: <p style="font-size:22px"><u><b><i>"Build-status":</i>${{ job.status }}</b></u><br><br><br><u>"Run-id":</u>${{GITHUB.RUN_ID}}<br><u>"Pretext":</u>Built branch ${{ github.ref }}<br><u>"Run-number":</u>${{GITHUB.RUN_NUMBER}}<br><u>"Github-repository-name":</u>${{GITHUB.REPOSITORY}}<br><u>"Triggered-by":</u>${{GITHUB.ACTOR}}<br><u>"Check-Logs":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/commit/${{ GITHUB.SHA }}/checks<br><u>"Sonarcloud-Report":</u>https://sonarcloud.io/dashboard?id=vardans6_yobored-android<br><u>"AWS-Codepipeline-Running-Status":</u>https://ap-south-1.console.aws.amazon.com/codesuite/codepipeline/pipelines/yobored-pipeline/view?region=ap-south-1<br><u>"AWS-Device-Farm-Running-Test":</u>https://us-west-2.console.aws.amazon.com/devicefarm/home?region=ap-south-1#/projects</p>
+          to: ${{ secrets.MAIL_TO }}
+          from: CI/CD Notifications
+        if: always()
+#       - name: Deploy
+#         uses: zackify/AppCenter-Github-Action@1.0.0
+#         with:
+#           appName: ${{ secrets.NAME }}
+#           token: ${{secrets.APP_CENTER_TOKEN}}
+#           group: ${{ GROUP-NAME }}
+#           file: app/build/outputs/apk/debug/app-debug.apk

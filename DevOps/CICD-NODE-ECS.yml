@@ -1,0 +1,135 @@
+on:
+  push:
+    branches:
+      - master
+
+name: Deploy to AWS {Node}
+
+jobs: 
+  
+  deploy:
+    name: CI/CD-Node-AWS
+    runs-on:  ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      REPOSITORY_URL: github.com
+      IMAGE_NAME: ${{ github.repository }}/yobored-node
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    strategy:
+     matrix:
+       node-version: [12.x]
+    steps:
+     - uses: act10ns/slack@v1
+       with:
+         status: starting
+        channel: '#general'
+       if: always()    
+      - name: 'Sending SMS Notification'
+        uses: twilio-labs/actions-sms@v1
+        with:
+          fromPhoneNumber: 
+          toPhoneNumber: 
+          message: ' "${{ job.status }}"  "${{ github.event_name }}" in "${{ github.repository }}" '
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY }}
+          TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET }}
+     - uses: actions/checkout@v2
+     - name: Use Node.js ${{ matrix.node-version }}
+       uses: actions/setup-node@v1
+       with:
+          node-version: ${{ matrix.node-version }}
+     - run: sudo -i
+     - run: npm clean-install
+     - run: npm build .
+    #- run: npm install --global --production windows-build-tools
+    #- run: npm install node-gyp
+    #- run: npm run yobored-node
+    #- run: npm install-ci-test
+    #- run: npm install --save express
+    #- run: npm run dev      
+     - name:  AWS credentials
+       uses: aws-actions/configure-aws-credentials@v1
+       with:
+         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+         aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+         aws-region: ${{ secrets.REGION }}
+     - name:  ECR
+       id: login-ecr
+       uses: aws-actions/amazon-ecr-login@v1
+     - name: Push Amazon ECR
+       id: build-image
+       env:
+         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+         ECR_REPOSITORY: ${{ secrets.REPO-NAME }}
+         IMAGE_TAG: ${{ github.sha }}
+       run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+     - name: Render Amazon ECS task definition
+       id: render-web-container
+       uses: aws-actions/amazon-ecs-render-task-definition@v1
+       with:
+         task-definition: task-definition.json
+         container-name: ${{ secrets.CONTAINETR-NAME}}
+         image: ${{steps.build-image.outputs.image}}
+     - name: Deploy service
+       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+       with:
+         task-definition: ${{steps.render-web-container.outputs.task-definition}}
+         service: ${{ secrets.SERVICE-NAME }}
+         cluster: ${[ secrets.CLUSTER-NAME }}]}
+         wait-for-service-stability: true
+#         fetch-depth: 0
+#     - name: SonarCloud Scan
+#       uses: sonarsource/sonarcloud-github-action@master
+#       env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB }}
+#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
+
+     - name: Check code 
+       id: code-inspector
+       uses: codeinspectorio/github-action@master
+       with:
+        repo_token: ${{ secrets.GITHUB }}
+        code_inspector_access_key: ${{ secrets.CODE_INSPECTOR_ACCESS_KEY }}
+        code_inspector_secret_key: ${{ secrets.CODE_INSPECTOR_SECRET_KEY }}
+        min_quality_grade: 'WARNING'
+        min_quality_score: '50'
+        max_defects_rate: '0.0001'
+        max_complex_functions_rate: '0.0001'
+        max_long_functions_rate: '0.0001'
+        project_name: ''
+        max_timeout_sec: '600'
+     - name: ZAP Scan
+       uses: zaproxy/action-baseline@v0.3.0
+       with:
+          token: ${{ secrets.GITHUB }}
+          docker_name: 'owasp/zap2docker-stable'
+          target: '${{ secrets.ENDPOINT }}'
+          #rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+     - uses: act10ns/slack@v1
+       with:
+          status: ${{ job.status }}
+          steps: ${{ toJson(steps) }}
+        #channel: '#general'
+       if: always()   
+     - name: Send mail
+       uses: dawidd6/action-send-mail@v2
+       with:
+          steps: ${{ toJson(steps) }}
+          server_address: ${{ secrets.SERVER }}
+          server_port: ${{ secrets.PORT }}
+          content_type: text/html
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject:  CI/CD Notifications-${{GITHUB.REPOSITORY}}-${{ job.status }}
+          body: <p style="font-size:22px"><u><b><i>"Job-status":</i>${{ job.status }}</b></u><br><br><br><u>"Run-id":</u>${{GITHUB.RUN_ID}}<br><u>"Pretext":</u>Built branch ${{ github.ref }}<br><u>"Run-number":</u>${{GITHUB.RUN_NUMBER}}<br><u>"Github-repository-name":</u>${{GITHUB.REPOSITORY}}<br><u>"Triggered-by":</u>${{GITHUB.ACTOR}}<br><u>"Check-Logs":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/commit/${{ GITHUB.SHA }}/checks<br><u>"ZAP-Scan-Baseline-Report":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/issues</p>
+          #body: file://README.md
+          to: ${{ secrets.MAIL_TO }}
+          from: CI/CD Notifications
+          #attachments:     #,git.diff,main.js
+       if: always()

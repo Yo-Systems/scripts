@@ -1,0 +1,20 @@
+name: Service-J
+on:
+  push:
+   branches:
+     - master
+   paths:
+      - 'GG.json'
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: trigger single Job
+      uses: appleboy/jenkins-action@master
+      with:
+        url: "${{ ENDPOINT }}"
+        user: "admin"
+        token: ${{ J-Token }}
+        job: "service" 

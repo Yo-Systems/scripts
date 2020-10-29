@@ -1,0 +1,138 @@
+on:
+  push:
+    branches:
+       - master
+      
+
+name: Build and Deploy to EKS
+
+env:
+  AWS_REGION: us-west-1
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  CONTAINER_IMAGE: ${{ secrets.IMAGE }}:${{ github.sha }}
+
+jobs:
+  build-and-deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    steps:    
+    - uses: act10ns/slack@v1
+      with:
+         status: starting
+         channel: '#general'
+      if: always()             
+    - name: Context
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: |
+        echo "$GITHUB_CONTEXT"
+    - name: Checkout
+      uses: actions/checkout@master
+    - name: Setup AWS
+      env:
+        AWS_HOME: ${{ runner.temp }}/.aws
+        AWS_CONFIG_FILE: ${{ runner.temp }}/.aws/config
+        AWS_SHARED_CREDENTIALS_FILE: ${{ runner.temp }}/.aws/credentials
+      run: |
+        mkdir -p "${HOME}/.local/bin"
+        export PATH="${HOME}/.local/bin:${PATH}"
+        echo "::set-env name=PATH,::${PATH}"
+        mkdir -p "${AWS_HOME}"
+        echo "::set-env name=AWS_CONFIG_FILE,::${AWS_CONFIG_FILE}"
+        echo "::set-env name=AWS_SHARED_CREDENTIALS_FILE,::${AWS_SHARED_CREDENTIALS_FILE}"
+        aws configure set default.region "${AWS_REGION}"
+        aws configure set default.output json
+        aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws sts get-caller-identity
+    - name: Setup ECR
+      run: |
+        $( aws ecr get-login --region $AWS_REGION --no-include-email )
+    - name: Setup Kube Context
+      env:
+        KUBECONFIG: ${{ runner.temp }}/.kube/config
+      run: |
+        cd $( mktemp -d )
+        curl -o aws-iam-authenticator --location https://amazon-eks.s3-us-west-2.amazonaws.com/1.13.7/2019-06-11/bin/linux/amd64/aws-iam-authenticator
+        chmod +x ./aws-iam-authenticator
+        mv ./aws-iam-authenticator "${HOME}/.local/bin"
+        aws-iam-authenticator help
+        
+        # cd $( mktemp -d )
+        # curl -o kustomize --location https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+        # chmod u+x ./kustomize
+        # mv ./kustomize "${HOME}/.local/bin"
+
+        mkdir -p "${RUNNER_TEMP}/.kube"
+        echo "::set-env name=KUBECONFIG,::${KUBECONFIG}"
+        echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > "${KUBECONFIG}"
+    - name: Build, tag, and save the image
+      run: |
+        # Build and tag the image
+        docker build \
+          -t $CONTAINER_IMAGE \
+          -t ${{ secrets.ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$CONTAINER_IMAGE .
+#          -t $GITHUB_REPOSITORY:$GITHUB_SHA \
+#        docker save $CONTAINER_IMAGE | gzip > ./yobored-eks.tar.gz
+#        du -h ./yobored-eks.tar.gz
+#    - name: Upload artifact
+#      uses: actions/upload-artifact@v1.0.0
+#      with:
+#        name: docker-image
+#         path: ./yobored-eks.tar.gz
+
+    - name: Deploy
+      if: github.ref == 'refs/heads/master'
+      run: |
+         docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$CONTAINER_IMAGE
+         export KUBECONFIG="${RUNNER_TEMP}/.kube/config"
+         
+         kubectl --record deployment.apps/${{ secrets.APP }} set image deployment.v1.apps/${{ secrets.APP }} ${{ secrets.APP }}=${{ secrets.ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/${{ secrets.APP }}:${GITHUB_SHA} -n kube-system
+         kubectl rollout status deployment/${{ secrets.APP }} -n kube-system
+         kubectl get ingress ${{ secrets.INGRESS }} -n kube-system  
+#        kubectl apply -f Deployment.yaml -n kube-system       
+#        kustomize edit set image ${{ secrets.ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/${{ secrest.IMAGE }}:${GITHUB_SHA}
+#        kustomize build manifests/       
+    - name: ZAP Scan
+      uses: zaproxy/action-baseline@v0.4.0
+      with:
+          token: ${{ secrets.GITHUB }}
+          docker_name: 'owasp/zap2docker-stable'
+          target: ${{ secrets.ENDPOINT }}
+          cmd_options: '-a'
+    - name: Check code meets quality standards
+      id: code-inspector
+      uses: codeinspectorio/github-action@master
+      with:
+        repo_token: ${{ secrets.GITHUB }}
+        code_inspector_access_key: ${{ secrets.CODE_INSPECTOR_ACCESS_KEY }}
+        code_inspector_secret_key: ${{ secrets.CODE_INSPECTOR_SECRET_KEY }}
+        min_quality_grade: 'WARNING'
+        min_quality_score: '50'
+        max_defects_rate: '0.0001'
+        max_complex_functions_rate: '0.0001'
+        max_long_functions_rate: '0.0001'
+        project_name: ''
+        max_timeout_sec: '600'
+    - uses: act10ns/slack@v1
+       with:
+          status: ${{ job.status }}
+          steps: ${{ toJson(steps) }}
+        #channel: '#general'
+       if: always()   
+    - name: Send mail
+       uses: dawidd6/action-send-mail@v2
+       with:
+          #steps: ${{ toJson(steps) }}
+          server_address: ${{ secrets.SERVER }}
+          server_port: ${{ secrets.PORT }}
+          content_type: text/html
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject:  Yobord Microservices CI/CD Notifications-${{GITHUB.REPOSITORY}}-${{ job.status }}
+          body: <p style="font-size:22px"><u><b><i>"Job-status":</i>${{ job.status }}</b></u><br><br><br><u>"Run-id":</u>${{GITHUB.RUN_ID}}<br><u>"Pretext":</u>Built branch ${{ github.ref }}<br><u>"Run-number":</u>${{GITHUB.RUN_NUMBER}}<br><u>"Github-repository-name":</u>${{GITHUB.REPOSITORY}}<br><u>"Triggered-by":</u>${{GITHUB.ACTOR}}<br><u>"Check-Logs":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/commit/${{ GITHUB.SHA }}/checks<br><u>"ZAP-Scan-Baseline-Report":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/issues</p>
+          #body: file://README.md
+          to: ${{ secrets.MAIL_TO }}
+          from: ${{ secrets.FROM }} 
+          #attachments:     #,git.diff,main.js
+       if: always()

@@ -1,0 +1,147 @@
+trigger:
+  - RS_Feed_06042020
+pool:
+  vmImage: 'macos-latest'
+variables:
+  - group: yobored
+  - name: configuration
+    value: 'Debug'
+  - name: sdk
+    value: 'iphoneos'
+steps:
+- task: InstallAppleCertificate@2
+  inputs:
+    certSecureFile: '$(p12FileName)'
+    certLocation: 'secureFiles'
+    certPwd: '$(p12Password)'
+    keychain: 'temp'
+    deleteCert: true  
+- task: InstallAppleProvisioningProfile@1
+  inputs:
+    provisioningProfileLocation: 'secureFiles'
+    provProfileSecureFile: '$(ProvisioningProfileName)'
+    removeProfile: true
+- task: InstallAppleProvisioningProfile@1
+  inputs:
+    provisioningProfileLocation: 'secureFiles'
+    provProfileSecureFile: '$(ProvisioningNotification)'
+    removeProfile: true
+- task: InstallAppleProvisioningProfile@1
+  inputs:
+    provisioningProfileLocation: 'secureFiles'
+    provProfileSecureFile: '$(ProvisioningShare)'
+    removeProfile: true
+- task: CocoaPods@0
+  inputs:
+    workingDirectory: '$(working-dir)'
+    forceRepoUpdate: false    
+- task: CmdLine@2
+  inputs:
+    script: |
+      echo "uninstalling all cocoapods versions"
+      sudo gem uninstall cocoapods -ax
+      echo "installing cocoapods version 1.5.3"
+      sudo gem install cocoapods -v 1.5.3
+- task: Xcode@5
+  inputs:
+    actions: 'build'
+    scheme: 'ChatNotificationExtension'
+    sdk: 'iphoneos'
+    configuration: 'Debug'
+    xcWorkspacePath: '$(Workspace-Path)'
+    xcodeVersion: 'default'
+    packageApp: false
+    signingOption: 'manual'
+    signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
+    provisioningProfileUuid: '$(ChatNotification-uuid)'
+    teamId: '$(Team-id)'
+    args: 'CODE_SIGNING_ALLOWED=No'
+- task: Xcode@5
+  inputs:
+    actions: 'build'
+    scheme: 'ShareToYobored'
+    sdk: 'iphoneos'
+    configuration: 'Debug'
+    xcWorkspacePath: '$(Workspace-Path)'
+    xcodeVersion: 'default'
+    packageApp: false
+    signingOption: 'manual'
+    signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
+    provisioningProfileUuid: '$(Share-uuid)'
+    teamId: '$(Team-id)'
+    #useXcpretty: 'false'
+    args: 'CODE_SIGNING_ALLOWED=No'
+- task: Xcode@5
+  inputs:
+    actions: 'clean build'
+    scheme: 'Yobored'
+    sdk: 'iphoneos'
+    configuration: 'Debug'
+    xcWorkspacePath: '$(Workspace-Path)'
+    xcodeVersion: 'default'
+    packageApp: true
+    signingOption: 'manual'
+    exportPath: '$(working-dir)'
+    signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
+    provisioningProfileUuid: '$(yobored-uuid)'
+    teamId: '$(Team-id)'
+    exportMethod: development
+    exportOptions: 'plist'
+    exportOptionsPlist: '$(ExportOptionsPlist)'
+    exportTeamId: '$(Team-id)'
+    #useXcpretty: 'false' 
+    args: 'CODE_SIGNING_ALLOWED=No'
+- task: CopyFiles@2
+  inputs:
+    contents: '$(contents)'
+    targetFolder: '$(TargetFolder)'
+    overWrite: true   
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(build.artifactStagingDirectory)/output/$(sdk)/$(configuration)/'
+    contents: 'Yobored.ipa'
+    targetFolder: 'tests/'
+    overWrite: true   
+- task: CmdLine@2
+  inputs:
+    script: |
+      sudo ls
+      sudo zip -r ios-app.zip Yobored/tests/
+    failOnStderr: true
+
+- task: ArchiveFiles@2
+  inputs:
+     rootFolderOrFile: 'Yobored/tests' 
+     includeRootFolder: true 
+     archiveType: 'zip' 
+    #tarCompression: 'gz' # Optional. Options: gz, bz2, xz, none
+     archiveFile: 'ios-app.zip' 
+     replaceExistingArchive: true 
+    #verbose: # Optional
+    #quiet: # Optional
+- task: CmdLine@2
+  inputs:
+    script: |
+      sudo ls
+    failOnStderr: true 
+  
+- task: AmazonWebServices.aws-vsts-tools.S3Upload.S3Upload@1
+  displayName: 'S3 Upload: Yobored.ipa'
+  inputs:
+    awsCredentials: 'aws-connection'
+    regionName: 'ap-south-1'
+    bucketName: '$(bucket-name)'
+    #sourceFolder: '$(working-dir)'
+    globExpressions: '$(Expression)'
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathtoPublish: 'ios-app.zip' 
+    artifactName: 'drop' 
+    publishLocation: 'Container'
+    
+    
+#- task: PublishBuildArtifacts@1
+#  inputs:
+#    pathtoPublish: 'ios-app.zip' 
+#    artifactName: 'drop' 
+#    publishLocation: 'Container'
