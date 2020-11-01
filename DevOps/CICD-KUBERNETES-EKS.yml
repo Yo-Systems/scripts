@@ -74,12 +74,12 @@ jobs:
           -t ${{ secrets.ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$CONTAINER_IMAGE .
 #          -t $GITHUB_REPOSITORY:$GITHUB_SHA \
 #        docker save $CONTAINER_IMAGE | gzip > ./yobored-eks.tar.gz
-#        du -h ./yobored-eks.tar.gz
+#        du -h ./yo-systems-eks.tar.gz
 #    - name: Upload artifact
 #      uses: actions/upload-artifact@v1.0.0
 #      with:
 #        name: docker-image
-#         path: ./yobored-eks.tar.gz
+#         path: ./yo-systems-eks.tar.gz
 
     - name: Deploy
       if: github.ref == 'refs/heads/master'
@@ -129,7 +129,7 @@ jobs:
           content_type: text/html
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject:  Yobord Microservices CI/CD Notifications-${{GITHUB.REPOSITORY}}-${{ job.status }}
+          subject:  Yo-Systems Microservices CI/CD Notifications-${{GITHUB.REPOSITORY}}-${{ job.status }}
           body: <p style="font-size:22px"><u><b><i>"Job-status":</i>${{ job.status }}</b></u><br><br><br><u>"Run-id":</u>${{GITHUB.RUN_ID}}<br><u>"Pretext":</u>Built branch ${{ github.ref }}<br><u>"Run-number":</u>${{GITHUB.RUN_NUMBER}}<br><u>"Github-repository-name":</u>${{GITHUB.REPOSITORY}}<br><u>"Triggered-by":</u>${{GITHUB.ACTOR}}<br><u>"Check-Logs":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/commit/${{ GITHUB.SHA }}/checks<br><u>"ZAP-Scan-Baseline-Report":</u>${{GITHUB.SERVER_URL}}/${{GITHUB.REPOSITORY}}/issues</p>
           #body: file://README.md
           to: ${{ secrets.MAIL_TO }}
