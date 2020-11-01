@@ -1,0 +1,22 @@
+[
+    {
+        "name": "yo-systems-task",
+        "image": "image-endpoint",
+        "cpu": 10,
+        "memory": 512,
+        "links": [],
+        "portMappings": [
+            {
+                "containerPort": 8080,
+                "hostPort": 8080,
+                "protocol": "tcp"
+            }
+        ],
+        "essential": true,
+        "entryPoint": [],
+        "command": [],
+        "environment": [],
+        "mountPoints": [],
+        "volumesFrom": []
+    }
+]
