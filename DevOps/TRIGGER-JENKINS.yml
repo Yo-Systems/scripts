@@ -4,7 +4,7 @@ on:
    branches:
      - master
    paths:
-      - 'GG.json'
+      - 'service-name.json'
 jobs:
 
   build:
@@ -16,5 +16,5 @@ jobs:
       with:
         url: "${{ ENDPOINT }}"
         user: "admin"
-        token: ${{ J-Token }}
+        token: ${{ Jenkins-Token }}
         job: "service" 
