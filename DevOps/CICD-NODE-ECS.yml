@@ -13,7 +13,7 @@ jobs:
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       REPOSITORY_URL: github.com
-      IMAGE_NAME: ${{ github.repository }}/yobored-node
+      IMAGE_NAME: ${{ github.repository }}/yo-systems-node
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     strategy:
      matrix:
@@ -44,7 +44,7 @@ jobs:
      - run: npm build .
     #- run: npm install --global --production windows-build-tools
     #- run: npm install node-gyp
-    #- run: npm run yobored-node
+    #- run: npm run yo-systems-node
     #- run: npm install-ci-test
     #- run: npm install --save express
     #- run: npm run dev      
