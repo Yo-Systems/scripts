@@ -3,7 +3,7 @@ trigger:
 pool:
   vmImage: 'macos-latest'
 variables:
-  - group: yobored
+  - group: Yo-Systems
   - name: configuration
     value: 'Debug'
   - name: sdk
@@ -59,7 +59,7 @@ steps:
 - task: Xcode@5
   inputs:
     actions: 'build'
-    scheme: 'ShareToYobored'
+    scheme: 'ShareToYo'
     sdk: 'iphoneos'
     configuration: 'Debug'
     xcWorkspacePath: '$(Workspace-Path)'
@@ -74,7 +74,7 @@ steps:
 - task: Xcode@5
   inputs:
     actions: 'clean build'
-    scheme: 'Yobored'
+    scheme: 'Yo-Systems'
     sdk: 'iphoneos'
     configuration: 'Debug'
     xcWorkspacePath: '$(Workspace-Path)'
@@ -83,7 +83,7 @@ steps:
     signingOption: 'manual'
     exportPath: '$(working-dir)'
     signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
-    provisioningProfileUuid: '$(yobored-uuid)'
+    provisioningProfileUuid: '$(yo-uuid)'
     teamId: '$(Team-id)'
     exportMethod: development
     exportOptions: 'plist'
@@ -99,19 +99,19 @@ steps:
 - task: CopyFiles@2
   inputs:
     SourceFolder: '$(build.artifactStagingDirectory)/output/$(sdk)/$(configuration)/'
-    contents: 'Yobored.ipa'
+    contents: 'Yo.ipa'
     targetFolder: 'tests/'
     overWrite: true   
 - task: CmdLine@2
   inputs:
     script: |
       sudo ls
-      sudo zip -r ios-app.zip Yobored/tests/
+      sudo zip -r ios-app.zip Yo/tests/
     failOnStderr: true
 
 - task: ArchiveFiles@2
   inputs:
-     rootFolderOrFile: 'Yobored/tests' 
+     rootFolderOrFile: 'Yo/tests' 
      includeRootFolder: true 
      archiveType: 'zip' 
     #tarCompression: 'gz' # Optional. Options: gz, bz2, xz, none
@@ -126,10 +126,10 @@ steps:
     failOnStderr: true 
   
 - task: AmazonWebServices.aws-vsts-tools.S3Upload.S3Upload@1
-  displayName: 'S3 Upload: Yobored.ipa'
+  displayName: 'S3 Upload: Yo.ipa'
   inputs:
     awsCredentials: 'aws-connection'
-    regionName: 'ap-south-1'
+    regionName: 'Region-name'
     bucketName: '$(bucket-name)'
     #sourceFolder: '$(working-dir)'
     globExpressions: '$(Expression)'
