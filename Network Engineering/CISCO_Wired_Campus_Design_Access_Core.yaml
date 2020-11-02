@@ -1,0 +1,139 @@
+---
+
+- name: Cisco Wired Campus Design - Access 
+  hosts: host-group-name-access
+  gather_facts: false
+  connection: local
+
+  vars:
+    cli:
+      username: username
+      password: cisco 
+      transport: cli
+
+    tasks: 
+      - name: Global config settings
+        ios_config: 
+          provider: "{{ cli }}"
+          lines:
+            - vtp mode transparent 
+            - spanning-tree mode rapid-pvst
+            - udld enable
+            - errdisable recovery cause all
+            - port-channel load-balance src-dst-ip
+            - ip name-server 8.8.8.8
+            - no ip http server 
+            - ip http secure-server
+
+            - snmp-server community python1 R0
+            - snmp-server community python2 RW
+
+            - ntp server xx.xx.xx.xx
+            - ntp update-calendar
+
+            - clock timezone CST -8
+            - clock summer-time PDT recurring
+            - service timestamps debug datetime msec localtime
+            - service timestamps log datetime msec localtime
+
+            - "vlan 1,10,20,30,40,50,100,101"
+            - ip default-gateway 192.168.122.1
+            - "ip dhcp snooping vlan 100,101"
+
+            - no ip dhcp snooping information option 
+            - ip dhcp snooping
+            - "ip arp inspectio vlan 100, 101"
+            - spanning-tree portfast bpcduguard default-gateway
+
+        register: print_output
+
+      - debug: var=print_output
+
+      - name: IPv6 nd policy
+        ios_config:
+          provider: "{{ cli }}"
+          parents: ipv6 nd raguard policy HOST_POLICY
+          lines:
+            - device-role host
+
+        register: print_output
+
+      - debug: var=print_output
+
+      - name: Interface settings
+        ios_config:
+          provider: "{{ cli }}"
+          parents: "interface {{ item.interface }}"
+          lines:
+            - "switchport access vlan {{ item.vlan }}"
+            - "switchport voice vlan {{ item.voice_vlan }}"
+            - switchport host
+            - switchport port-security maximum 2
+            - switchport port-security
+            - switchport port-security aging time 2
+            - switchport port-security aging type inactivity 
+            - switchport port-security violation restrict 
+            - ip arp inspection limit rate 100
+            - ip dhcp snooping limit rate 100
+            - ip verify source
+            - ipv6 nd raguard attach-policy HOST_POLICY
+          after:
+            - no shutdown 
+        with_items:
+          - { interface : GigabitEthernet1/0, vlan : 100, voice_vlan : 101 }
+          - { interface : GigabitEthernet1/1, vlan: 10, voice_vlan : 101 }
+          - { interface : GigabitEthernet1/2, vlan : 20, voice_vlan : 101 }
+
+        register: print_output
+
+- name: Cisco Wired Campus Design - Core
+  hosts: host-group-name-core
+  gather_facts: false
+  connection: local
+
+  vars:
+    cli:
+      username: david
+      password: cisco
+      transport: cli
+
+  tasks:
+    - name: Global config settings
+        ios_config: 
+          provider: "{{ cli }}"
+          lines:
+            - vtp mode transparent 
+            - spanning-tree mode rapid-pvst
+            - udld enable
+            - errdisable recovery cause all
+            - port-channel load-balance src-dst-ip
+            - ip name-server 8.8.8.8
+            - no ip http server 
+            - ip http secure-server
+
+            - snmp-server community python1 R0
+            - snmp-server community python2 RW
+
+            - ntp server xx.xx.xx.xx
+            - ntp update-calendar
+
+            - clock timezone CST -8
+            - clock summer-time PDT recurring
+            - service timestamps debug datetime msec localtime
+            - service timestamps log datetime msec localtime
+
+            - "vlan 1,10,20,30,40,50,100,101"
+            - ip default-gateway 192.168.122.1
+            - "ip dhcp snooping vlan 100,101"
+
+            - no ip dhcp snooping information option 
+            - ip dhcp snooping
+            - "ip arp inspectio vlan 100, 101"
+            - spanning-tree portfast bpcduguard default-gateway
+          
+
+
+
+
+
+
