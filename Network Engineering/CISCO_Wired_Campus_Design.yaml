@@ -1,0 +1,50 @@
+---
+
+- name: Cisco Wired Campus Design 
+  hosts: host-group-name
+  gather_facts: false
+  connection: local
+
+  vars:
+    cli:
+      username: username
+      password: cisco 
+      transport: cli
+
+    tasks: 
+      - name: Global config settings
+        ios_config: 
+          provider: "{{ cli }}"
+          lines:
+            - vtp mode transparent 
+            - spanning-tree mode rapid-pvst
+            - udld enable
+            - errdisable recovery cause all
+            - port-channel load-balance src-dst-ip
+            - ip name-server 8.8.8.8
+            - no ip http server 
+            - ip http secure-server
+
+            - snmp-server community python1 R0
+            - snmp-server community python2 RW
+
+            - ntp server xx.xx.xx.xx
+            - ntp update-calendar
+
+            - clock timezone CST -8
+            - clock summer-time PDT recurring
+            - service timestamps debug datetime msec localtime
+            - service timestamps log datetime msec localtime
+
+            - "vlan 1,10,20,30,40,50,100,101"
+            - ip default-gateway 192.168.122.1
+            - "ip dhcp snooping vlan 100,101"
+
+            - no ip dhcp snooping information option 
+            - ip dhcp snooping
+            - "ip arp inspectio vlan 100, 101"
+            - spanning-tree portfast bpcduguard default-gateway
+
+        register: print_output
+
+      - debug: var=print_output
