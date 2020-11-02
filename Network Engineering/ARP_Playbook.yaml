@@ -1,0 +1,18 @@
+---
+- name: Get ARP information
+  hosts: all
+  gather_facts: false
+
+
+  tasks:
+    - name: show arp
+      raw: "show arp"
+
+      register: print_output
+
+    -  debug: var=print_output.stdout_lines
+
+# Commands to run: 
+#1) ansible-playbook file.yml -u username -k
+#2) Grep for MAC address: ansible-playbook file.yml -u username -k | grep 'ok:\|fe7a'
+#3) Grep for IP address: ansible-playbook file.yml -u username -k | grep 'ok:\|122\.3'
