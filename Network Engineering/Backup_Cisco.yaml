@@ -1,0 +1,27 @@
+- name: Backup show version and other user level commands
+  hosts: all
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: run multiple commands on remote nodes
+      ios_command:
+        commands:
+          - show version
+
+      register: print_output
+
+    -  debug: var=print_output.stdout_lines
+
+    - name: save output to a file
+      copy: content="{{ print_output.stdout[0] }}" dest="./output/{{ inventory_hostname }}.txt"
+
+
+# Description:
+# Use the ios commands module to get show version information and show interfaces information. 
+# These are user mode commands.
+# Save the output to files
+# http://docs.ansible.com/ansible/latest/ios_command_module.html
+
+# Commands to run: 
+#1) ansible-playbook Backup_Cisco.yml -u username -k
